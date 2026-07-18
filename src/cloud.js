@@ -45,6 +45,19 @@ function jwtSub(token) {
   }
 }
 
+// access_token 是否已过期（留 30 秒余量）
+export function tokenExpired(token) {
+  try {
+    let p = token.split('.')[1];
+    p = p.replace(/-/g, '+').replace(/_/g, '/');
+    while (p.length % 4) p += '=';
+    const exp = JSON.parse(atob(p)).exp;
+    return !exp || exp * 1000 < Date.now() + 30000;
+  } catch (e) {
+    return true;
+  }
+}
+
 function toSession(data) {
   const id = (data.user && data.user.id) || jwtSub(data.access_token);
   return {

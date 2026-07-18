@@ -185,6 +185,7 @@ function startPolling() {
   stopPolling();
   pollTimer = setInterval(async () => {
     const r = await sync.sync();
+    if (checkSession()) return;
     if (r && r.changed && !state.editId) render();
   }, 30000);
 }
@@ -195,6 +196,7 @@ function stopPolling() {
 
 async function doRefresh() {
   await sync.sync();
+  if (checkSession()) return;
   if (sync.getStatus() === 'error') {
     alert('同步失败：' + (sync.getLastError() || '未知错误'));
   }
@@ -284,6 +286,7 @@ sync.onStatus(() => updateSyncPills());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.loggedIn) {
     sync.sync().then((r) => {
+      if (checkSession()) return;
       if (r && r.changed && !state.editId) render();
     });
   }
@@ -291,17 +294,38 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', () => {
   if (state.loggedIn) {
     sync.sync().then((r) => {
+      if (checkSession()) return;
       if (r && r.changed && !state.editId) render();
     });
   }
 });
 
+// 同步后发现登录态失效（刷新失败已清会话）→ 回到登录页
+function checkSession() {
+  if (state.loggedIn && !cloud.loadSession()) {
+    state.loggedIn = false;
+    stopPolling();
+    render();
+    return true;
+  }
+  return false;
+}
+
 // 启动
-function init() {
+async function init() {
   state.configured = cloud.isConfigured();
   state.loggedIn = state.configured && sync.isLoggedIn();
-  render();
+  render(); // 先用本地数据画出界面
   if (state.loggedIn) {
+    const s = cloud.loadSession();
+    if (!s || cloud.tokenExpired(s.access_token)) {
+      await cloud.refresh(); // 主动刷新过期令牌；失败会清会话
+      if (!cloud.loadSession()) {
+        state.loggedIn = false; // 刷新失败，需重新登录
+        render();
+        return;
+      }
+    }
     startPolling();
     sync.sync().then((r) => {
       if (r && r.changed && !state.editId) render();

@@ -5,6 +5,7 @@ import * as cloud from './cloud.js';
 
 let status = 'idle'; // idle | syncing | offline | error
 let lastError = '';
+let busy = false;
 const listeners = new Set();
 
 export function getStatus() {
@@ -111,12 +112,14 @@ async function pushDirty(session) {
 
 // 完整同步：推送 → 删墓碑 → 拉取合并。返回 { changed }
 export async function sync() {
+  if (busy) return { changed: false };
   const session = cloud.loadSession();
   if (!session) return { changed: false };
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     setStatus('offline');
     return { changed: false };
   }
+  busy = true;
   setStatus('syncing');
   let changed = false;
   try {
@@ -148,17 +151,21 @@ export async function sync() {
     lastError = e.message || String(e);
     setStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'error');
     return { changed };
+  } finally {
+    busy = false;
   }
 }
 
 // 本地变更后立即尽力推送（不拉取，快速同步出去；失败下次 sync 重试）
 export async function pushNow() {
+  if (busy) return;
   const session = cloud.loadSession();
   if (!session) return;
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     setStatus('offline');
     return;
   }
+  busy = true;
   setStatus('syncing');
   try {
     await pushDirty(session);
@@ -167,5 +174,7 @@ export async function pushNow() {
   } catch (e) {
     lastError = e.message || String(e);
     setStatus('error');
+  } finally {
+    busy = false;
   }
 }
