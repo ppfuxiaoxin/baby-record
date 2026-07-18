@@ -34,11 +34,23 @@ export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+function jwtSub(token) {
+  try {
+    let p = token.split('.')[1];
+    p = p.replace(/-/g, '+').replace(/_/g, '/');
+    while (p.length % 4) p += '=';
+    return JSON.parse(atob(p)).sub;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 function toSession(data) {
+  const id = (data.user && data.user.id) || jwtSub(data.access_token);
   return {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
-    user: { id: data.user && data.user.id, email: data.user && data.user.email },
+    user: { id, email: data.user && data.user.email },
   };
 }
 
