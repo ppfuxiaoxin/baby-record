@@ -32,6 +32,7 @@ export function addRecord(record) {
     updatedAt: now,
     synced: false,
     cloudObjectId: null,
+    note: null,
     ...record,
   };
   records.push(full);

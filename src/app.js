@@ -2,7 +2,7 @@
 import * as storage from './storage.js';
 import * as cloud from './cloud.js';
 import * as sync from './sync.js';
-import { renderHome, renderHistory, renderCycleDetail, renderEditSheet, renderLogin } from './ui.js';
+import { renderHome, renderHistory, renderCycleDetail, renderEditSheet, renderLogin, renderTrend } from './ui.js';
 import { formatDuration } from './stats.js';
 
 const app = document.getElementById('app');
@@ -16,6 +16,7 @@ const state = {
   configured: false,
   loggedIn: false,
   registering: false,
+  trendMetric: 'sleepMinutes',
 };
 
 function render() {
@@ -32,6 +33,8 @@ function render() {
     app.innerHTML = renderHistory(records, status);
   } else if (state.view === 'cycleDetail') {
     app.innerHTML = renderCycleDetail(records, state.cycleKey, status);
+  } else if (state.view === 'trend') {
+    app.innerHTML = renderTrend(records, state.trendMetric);
   }
 
   if (state.editId) {
@@ -124,6 +127,9 @@ function saveEdit(form) {
     const endVal = form.querySelector('[name=end]').value;
     patch.end = endVal ? new Date(endVal).toISOString() : null;
   }
+
+  const noteVal = form.querySelector('[name=note]').value;
+  patch.note = noteVal.trim() || null;
 
   storage.updateRecord(id, patch);
   state.editId = null;
@@ -221,6 +227,14 @@ app.addEventListener('click', async (e) => {
     case 'cycle':
       state.view = 'cycleDetail';
       state.cycleKey = t.dataset.key;
+      render();
+      break;
+    case 'trend':
+      state.view = 'trend';
+      render();
+      break;
+    case 'trend-metric':
+      state.trendMetric = t.dataset.metric;
       render();
       break;
     case 'edit':

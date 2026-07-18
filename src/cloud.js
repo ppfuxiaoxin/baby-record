@@ -157,6 +157,7 @@ function fromRow(row) {
     formulaMl: row.formula_ml ?? null,
     pee: row.pee ?? null,
     poop: row.poop ?? null,
+    note: row.note ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -182,6 +183,7 @@ export async function create(session, payload) {
     formula_ml: payload.formulaMl,
     pee: payload.pee,
     poop: payload.poop,
+    note: payload.note ?? null,
     created_at: now,
     updated_at: now,
   };
@@ -201,6 +203,7 @@ export async function update(session, objectId, payload) {
     formula_ml: payload.formulaMl,
     pee: payload.pee,
     poop: payload.poop,
+    note: payload.note ?? null,
     updated_at: now,
   };
   const url = `${LC.supabaseUrl}/rest/v1/${TABLE}?local_id=eq.${encodeURIComponent(objectId)}`;

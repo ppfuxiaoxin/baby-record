@@ -51,6 +51,18 @@ body {
 .login-form .btn-primary { margin-top: 4px; }
 .login-toggle { margin-top: 14px; font-size: 13px; }
 
+/* 备注与趋势图 */
+.note-line { color: #6B8299; }
+.field textarea { font-size: 15px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--text); background: #FAFCFF; resize: vertical; font-family: inherit; }
+.trend-btn { width: 100%; background: var(--blue-soft); color: var(--blue-dark); border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 600; margin-bottom: 12px; cursor: pointer; }
+.metric-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.metric-chip { border: 1px solid var(--line); background: var(--card); color: var(--muted); font-size: 13px; padding: 7px 12px; border-radius: 16px; cursor: pointer; }
+.metric-chip.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+.trend-card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+.trend-latest { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+.trend-latest b { color: var(--blue-dark); font-size: 16px; }
+.trend-svg { width: 100%; height: auto; display: block; }
+
 /* 统计卡 */
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 14px; }
 .stat { background: var(--card); border-radius: var(--radius); padding: 14px 6px; text-align: center; box-shadow: var(--shadow); }

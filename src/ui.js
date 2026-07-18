@@ -18,6 +18,10 @@ function isPending(r) {
   return false;
 }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function renderStats(s) {
   const items = [
     { label: '母乳时长', value: formatDuration(s.breastMinutes), icon: '🤱' },
@@ -55,6 +59,7 @@ function renderColCard(r) {
         )}`
       : `开始 ${formatTime(r.start)}<br>进行中`;
   }
+  if (r.note) detail += `<br><span class="note-line">📝 ${escapeHtml(r.note)}</span>`;
   return `
     <div class="col-card ${pend ? 'pending' : ''}" data-action="edit" data-id="${r.id}">
       <div class="col-time">${formatTime(r.start)}${pend ? ' <span class="col-dot">待补</span>' : ''}</div>
@@ -169,6 +174,7 @@ export function renderHistory(records, status) {
       <div class="cycle-title">历史周期</div>
       ${renderTopbarRight(status, false)}
     </header>
+    <button class="trend-btn" data-action="trend">📈 趋势图 · 按天看趋势</button>
     ${
       cycles.length
         ? `<ul class="cycle-list">${items}</ul>`
@@ -193,6 +199,59 @@ export function renderCycleDetail(records, key, status) {
       <h2>本周期记录</h2>
       ${renderRecordColumns(inCycle)}
     </section>
+  `;
+}
+
+const TREND_METRICS = [
+  { key: 'breastMinutes', label: '母乳时长', fmt: formatDuration, axis: (v) => (v >= 60 ? (v / 60).toFixed(1) + 'h' : String(v)) },
+  { key: 'formulaMl', label: '配方奶', fmt: (v) => `${v} ml`, axis: (v) => String(v) },
+  { key: 'poopCount', label: '大便', fmt: (v) => `${v} 次`, axis: (v) => String(v) },
+  { key: 'peeCount', label: '小便', fmt: (v) => `${v} 次`, axis: (v) => String(v) },
+  { key: 'diaperCount', label: '尿布', fmt: (v) => `${v} 次`, axis: (v) => String(v) },
+  { key: 'sleepMinutes', label: '睡眠', fmt: formatDuration, axis: (v) => (v >= 60 ? (v / 60).toFixed(1) + 'h' : String(v)) },
+];
+
+function renderLineChart(points, m) {
+  if (points.length < 2) return `<div class="empty-page">数据不足 2 天，暂无趋势</div>`;
+  const W = 320, H = 180, padL = 30, padR = 10, padT = 14, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const maxV = Math.max(1, ...points.map((p) => p.value));
+  const n = points.length;
+  const xAt = (i) => padL + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+  const yAt = (v) => padT + innerH - (v / maxV) * innerH;
+  const line = points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
+  const area = `${padL},${(padT + innerH).toFixed(1)} ${line} ${(padL + innerW).toFixed(1)},${(padT + innerH).toFixed(1)}`;
+  const dots = points.map((p, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="2.5" fill="#4A90D9"/>`).join('');
+  const fmtDate = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const labelIdx = [0, Math.floor((n - 1) / 2), n - 1];
+  const labels = labelIdx.map((i) => `<text x="${xAt(i).toFixed(1)}" y="${H - 7}" font-size="9" fill="#8AA0B6" text-anchor="middle">${fmtDate(points[i].date)}</text>`).join('');
+  const yMax = `<text x="${padL - 4}" y="${padT + 7}" font-size="9" fill="#8AA0B6" text-anchor="end">${m.axis(maxV)}</text>`;
+  const yZero = `<text x="${padL - 4}" y="${padT + innerH + 3}" font-size="9" fill="#8AA0B6" text-anchor="end">0</text>`;
+  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    <polygon points="${area}" fill="rgba(74,144,217,0.12)"/>
+    <polyline points="${line}" fill="none" stroke="#4A90D9" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${yMax}${yZero}${labels}
+  </svg>`;
+}
+
+export function renderTrend(records, metric) {
+  const cycles = listCycles(records).slice().reverse();
+  const m = TREND_METRICS.find((x) => x.key === metric) || TREND_METRICS[0];
+  const points = cycles.map((c) => ({ date: c.cycleStart, value: Number(c.stats[m.key]) || 0 }));
+  const chips = TREND_METRICS.map(
+    (x) => `<button class="metric-chip ${x.key === metric ? 'active' : ''}" data-action="trend-metric" data-metric="${x.key}">${x.label}</button>`
+  ).join('');
+  const latest = points.length ? m.fmt(points[points.length - 1].value) : '—';
+  return `
+    <header class="topbar">
+      <button class="link" data-action="history">‹ 返回</button>
+      <div class="cycle-title">趋势</div>
+    </header>
+    <div class="metric-chips">${chips}</div>
+    <div class="trend-card">
+      <div class="trend-latest">最近一天 ${m.label}：<b>${latest}</b></div>
+      ${renderLineChart(points, m)}
+    </div>
   `;
 }
 
@@ -252,6 +311,10 @@ export function renderEditSheet(r) {
         <input type="datetime-local" name="end"
           value="${r.end ? toLocalInput(r.end) : ''}" placeholder="未结束"></label>`;
   }
+
+  body += `
+      <label class="field"><span>备注（可选）</span>
+        <textarea name="note" rows="2" placeholder="如：吐奶、大便偏稀、这次吃得好">${escapeHtml(r.note)}</textarea></label>`;
 
   return `
     <div class="sheet-wrap">

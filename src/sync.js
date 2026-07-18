@@ -43,6 +43,7 @@ function fromCloud(c) {
     formulaMl: c.formulaMl ?? null,
     pee: c.pee ?? null,
     poop: c.poop ?? null,
+    note: c.note ?? null,
     cloudObjectId: c.objectId,
     synced: true,
     createdAt: c.createdAt,
@@ -61,6 +62,7 @@ function toCloud(r) {
     formulaMl: r.formulaMl,
     pee: r.pee,
     poop: r.poop,
+    note: r.note ?? null,
   };
 }
 
