@@ -189,6 +189,9 @@ function stopPolling() {
 
 async function doRefresh() {
   await sync.sync();
+  if (sync.getStatus() === 'error') {
+    alert('同步失败：' + (sync.getLastError() || '未知错误'));
+  }
   if (!state.editId) render();
 }
 

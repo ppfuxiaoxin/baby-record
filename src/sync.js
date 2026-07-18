@@ -4,10 +4,14 @@ import * as storage from './storage.js';
 import * as cloud from './cloud.js';
 
 let status = 'idle'; // idle | syncing | offline | error
+let lastError = '';
 const listeners = new Set();
 
 export function getStatus() {
   return status;
+}
+export function getLastError() {
+  return lastError;
 }
 export function onStatus(fn) {
   listeners.add(fn);
@@ -135,9 +139,11 @@ export async function sync() {
     for (const rec of toUpsert) storage.upsertRecord(rec);
     for (const id of toRemove) storage.removeRecordById(id);
 
+    lastError = '';
     setStatus('idle');
     return { changed };
   } catch (e) {
+    lastError = e.message || String(e);
     setStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'error');
     return { changed };
   }
@@ -154,8 +160,10 @@ export async function pushNow() {
   setStatus('syncing');
   try {
     await pushDirty(session);
+    lastError = '';
     setStatus('idle');
   } catch (e) {
+    lastError = e.message || String(e);
     setStatus('error');
   }
 }
