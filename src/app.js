@@ -1,33 +1,41 @@
-// app.js — 入口：视图路由、事件委托、记录操作
-import {
-  loadRecords,
-  addRecord,
-  updateRecord,
-  deleteRecord,
-  getRecord,
-  getOpenSleep,
-} from './storage.js';
-import { renderHome, renderHistory, renderCycleDetail, renderEditSheet } from './ui.js';
+// app.js — 入口：登录态、视图路由、事件委托、记录操作、同步
+import * as storage from './storage.js';
+import * as cloud from './cloud.js';
+import * as sync from './sync.js';
+import { renderHome, renderHistory, renderCycleDetail, renderEditSheet, renderLogin } from './ui.js';
 import { formatDuration } from './stats.js';
 
 const app = document.getElementById('app');
 let toastTimer = null;
+let pollTimer = null;
 
-// view: home | history | cycleDetail；editId 非空时叠加编辑面板
-const state = { view: 'home', cycleKey: null, editId: null };
+const state = {
+  view: 'home',
+  cycleKey: null,
+  editId: null,
+  configured: false,
+  loggedIn: false,
+  registering: false,
+};
 
 function render() {
-  const records = loadRecords();
+  // 已配置云服务但未登录 → 登录/注册页
+  if (state.configured && !state.loggedIn) {
+    app.innerHTML = renderLogin(state.registering);
+    return;
+  }
+  const records = storage.loadRecords();
+  const status = state.loggedIn ? sync.getStatus() : null;
   if (state.view === 'home') {
-    app.innerHTML = renderHome(records, getOpenSleep());
+    app.innerHTML = renderHome(records, storage.getOpenSleep(), status);
   } else if (state.view === 'history') {
-    app.innerHTML = renderHistory(records);
+    app.innerHTML = renderHistory(records, status);
   } else if (state.view === 'cycleDetail') {
-    app.innerHTML = renderCycleDetail(records, state.cycleKey);
+    app.innerHTML = renderCycleDetail(records, state.cycleKey, status);
   }
 
   if (state.editId) {
-    const r = getRecord(state.editId);
+    const r = storage.getRecord(state.editId);
     if (r) {
       const wrap = document.createElement('div');
       wrap.innerHTML = renderEditSheet(r);
@@ -56,49 +64,49 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-// —— 三大记录的快捷操作 ——
+// 同步状态变化 → 只更新顶栏 pill，不全量重渲染（避免打断编辑）
+function updateSyncPills() {
+  const s = sync.getStatus();
+  const text = { idle: '☁ 已同步', syncing: '⟳ 同步中', offline: '✗ 离线', error: '⚠ 点此重试' }[s] || '';
+  document.querySelectorAll('.sync-pill').forEach((el) => {
+    el.className = 'sync-pill sync-' + s;
+    el.textContent = text;
+  });
+}
+
+// —— 三大记录快捷操作 ——
 function quickFeeding() {
-  addRecord({
-    type: 'feeding',
-    start: new Date().toISOString(),
-    end: null,
-    breastMinutes: null,
-    formulaMl: null,
-  });
+  storage.addRecord({ type: 'feeding', start: new Date().toISOString(), end: null, breastMinutes: null, formulaMl: null });
   toast(`已记录喂养 ${nowHHMM()}，稍后可补时长/奶量`);
-  render();
+  afterChange();
 }
-
 function quickDiaper() {
-  addRecord({
-    type: 'diaper',
-    start: new Date().toISOString(),
-    end: null,
-    pee: null,
-    poop: null,
-  });
+  storage.addRecord({ type: 'diaper', start: new Date().toISOString(), end: null, pee: null, poop: null });
   toast(`已记录尿布 ${nowHHMM()}，稍后可选择大小便`);
-  render();
+  afterChange();
 }
-
 function toggleSleep() {
-  const open = getOpenSleep();
+  const open = storage.getOpenSleep();
   if (open) {
     const end = new Date().toISOString();
-    updateRecord(open.id, { end });
+    storage.updateRecord(open.id, { end });
     const mins = (new Date(end) - new Date(open.start)) / 60000;
     toast(`睡眠结束，共 ${formatDuration(mins)}`);
   } else {
-    addRecord({ type: 'sleep', start: new Date().toISOString(), end: null });
+    storage.addRecord({ type: 'sleep', start: new Date().toISOString(), end: null });
     toast(`睡眠开始 ${nowHHMM()}`);
   }
-  render();
+  afterChange();
 }
 
-// —— 编辑面板保存 ——
+function afterChange() {
+  render();
+  if (state.loggedIn) sync.pushNow();
+}
+
 function saveEdit(form) {
   const id = form.dataset.id;
-  const r = getRecord(id);
+  const r = storage.getRecord(id);
   if (!r) return;
   const patch = {};
   const startVal = form.querySelector('[name=start]').value;
@@ -117,26 +125,78 @@ function saveEdit(form) {
     patch.end = endVal ? new Date(endVal).toISOString() : null;
   }
 
-  updateRecord(id, patch);
+  storage.updateRecord(id, patch);
   state.editId = null;
   toast('已保存');
-  render();
+  afterChange();
 }
 
 function removeRecord(id) {
   if (!confirm('确定删除这条记录吗？')) return;
-  deleteRecord(id);
+  storage.deleteRecord(id);
   state.editId = null;
   toast('已删除');
-  render();
+  afterChange();
+}
+
+async function doLogin(form) {
+  const u = form.querySelector('[name=username]').value.trim();
+  const p = form.querySelector('[name=password]').value;
+  if (!u || !p) return;
+  try {
+    await cloud.login(u, p);
+    state.loggedIn = true;
+    await sync.sync(); // 迁移本机数据 + 拉取云端
+    startPolling();
+    render();
+  } catch (e) {
+    alert('登录失败：' + (e.message || '请检查用户名和密码'));
+  }
+}
+
+// 第一台手机"注册"创建全家共用的账号；其它手机用同一账号"登录"
+async function doSignup(form) {
+  const u = form.querySelector('[name=username]').value.trim();
+  const p = form.querySelector('[name=password]').value;
+  if (!u || !p) return;
+  if (p.length < 6) {
+    alert('密码至少 6 位');
+    return;
+  }
+  try {
+    await cloud.signup(u, p);
+    state.loggedIn = true;
+    state.registering = false;
+    await sync.sync();
+    startPolling();
+    render();
+  } catch (e) {
+    alert('注册失败：' + (e.message || '用户名可能已存在'));
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    const r = await sync.sync();
+    if (r && r.changed && !state.editId) render();
+  }, 30000);
+}
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+async function doRefresh() {
+  await sync.sync();
+  if (!state.editId) render();
 }
 
 // —— 事件委托 ——
-app.addEventListener('click', (e) => {
+app.addEventListener('click', async (e) => {
   const t = e.target.closest('[data-action]');
   if (!t) return;
-  const action = t.dataset.action;
-  switch (action) {
+  switch (t.dataset.action) {
     case 'feeding':
       quickFeeding();
       break;
@@ -171,6 +231,19 @@ app.addEventListener('click', (e) => {
     case 'delete':
       removeRecord(t.dataset.id || state.editId);
       break;
+    case 'logout':
+      sync.logout();
+      state.loggedIn = false;
+      stopPolling();
+      render();
+      break;
+    case 'refresh':
+      await doRefresh();
+      break;
+    case 'toggle-register':
+      state.registering = !state.registering;
+      render();
+      break;
   }
 });
 
@@ -178,13 +251,48 @@ app.addEventListener('submit', (e) => {
   if (e.target.matches('[data-action="save-edit"]')) {
     e.preventDefault();
     saveEdit(e.target);
+  } else if (e.target.matches('[data-action="login"]')) {
+    e.preventDefault();
+    doLogin(e.target);
+  } else if (e.target.matches('[data-action="signup"]')) {
+    e.preventDefault();
+    doSignup(e.target);
   }
 });
 
-// 首次渲染
-render();
+// 同步状态变化 → 更新 pill
+sync.onStatus(() => updateSyncPills());
 
-// 注册 service worker，离线可用
+// 回到前台 / 网络恢复 → 同步
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.loggedIn) {
+    sync.sync().then((r) => {
+      if (r && r.changed && !state.editId) render();
+    });
+  }
+});
+window.addEventListener('online', () => {
+  if (state.loggedIn) {
+    sync.sync().then((r) => {
+      if (r && r.changed && !state.editId) render();
+    });
+  }
+});
+
+// 启动
+function init() {
+  state.configured = cloud.isConfigured();
+  state.loggedIn = state.configured && sync.isLoggedIn();
+  render();
+  if (state.loggedIn) {
+    startPolling();
+    sync.sync().then((r) => {
+      if (r && r.changed && !state.editId) render();
+    });
+  }
+}
+init();
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js').catch(() => {});

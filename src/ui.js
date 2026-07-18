@@ -11,7 +11,6 @@ import {
 
 const TYPE_LABEL = { feeding: '喂养', diaper: '尿布', sleep: '睡眠' };
 
-// 是否为「待补充」记录（详情未填）
 function isPending(r) {
   if (r.type === 'feeding') return r.breastMinutes == null && r.formulaMl == null;
   if (r.type === 'diaper') return r.pee == null && r.poop == null;
@@ -36,7 +35,6 @@ function renderStats(s) {
     .join('')}</div>`;
 }
 
-// 单张记录卡（用于三列中的某一列）
 function renderColCard(r) {
   const pend = isPending(r);
   let detail = '';
@@ -64,7 +62,6 @@ function renderColCard(r) {
     </div>`;
 }
 
-// 三列展示：喂养 / 尿布 / 睡眠，各列按时间倒序（最新在上）
 function renderRecordColumns(records) {
   const byType = { feeding: [], diaper: [], sleep: [] };
   for (const r of records) {
@@ -81,15 +78,33 @@ function renderRecordColumns(records) {
   return `<div class="records-cols">${cols
     .map((c) => {
       const list = byType[c.key];
-      const body = list.length
-        ? list.map(renderColCard).join('')
-        : `<div class="col-empty">暂无</div>`;
+      const body = list.length ? list.map(renderColCard).join('') : `<div class="col-empty">暂无</div>`;
       return `<div class="col"><div class="col-head">${c.icon} ${c.label}</div>${body}</div>`;
     })
     .join('')}</div>`;
 }
 
-export function renderHome(records, openSleep) {
+function statusText(s) {
+  return (
+    { idle: '☁ 已同步', syncing: '⟳ 同步中', offline: '✗ 离线', error: '⚠ 点此重试' }[s] || ''
+  );
+}
+
+// 顶栏右侧：同步状态(可点刷新) + 首页的登出/历史。status 为 null 表示纯本机模式。
+function renderTopbarRight(status, isHome) {
+  if (!status) {
+    return isHome
+      ? `<div class="topbar-right"><button class="link" data-action="history">历史周期 ›</button></div>`
+      : '';
+  }
+  let inner = `<button class="sync-pill sync-${status}" data-action="refresh">${statusText(status)}</button>`;
+  if (isHome) {
+    inner += `<button class="link" data-action="logout">登出</button><button class="link" data-action="history">历史周期 ›</button>`;
+  }
+  return `<div class="topbar-right">${inner}</div>`;
+}
+
+export function renderHome(records, openSleep, status) {
   const cs = currentCycleStart();
   const inCycle = recordsInCycle(records, cs);
   const stats = computeStats(inCycle);
@@ -100,7 +115,7 @@ export function renderHome(records, openSleep) {
   return `
     <header class="topbar">
       <div class="cycle-title">本周期统计</div>
-      <button class="link" data-action="history">历史周期 ›</button>
+      ${renderTopbarRight(status, true)}
     </header>
     <div class="cycle-range sub">${formatDateRange(cs)}</div>
     ${renderStats(stats)}
@@ -129,7 +144,7 @@ export function renderHome(records, openSleep) {
   `;
 }
 
-export function renderHistory(records) {
+export function renderHistory(records, status) {
   const cur = currentCycleStart().getTime();
   const cycles = listCycles(records).filter((c) => c.cycleStart.getTime() < cur);
   const items = cycles
@@ -152,6 +167,7 @@ export function renderHistory(records) {
     <header class="topbar">
       <button class="link" data-action="home">‹ 返回</button>
       <div class="cycle-title">历史周期</div>
+      ${renderTopbarRight(status, false)}
     </header>
     ${
       cycles.length
@@ -161,7 +177,7 @@ export function renderHistory(records) {
   `;
 }
 
-export function renderCycleDetail(records, key) {
+export function renderCycleDetail(records, key, status) {
   const cs = new Date(Number(key));
   const inCycle = recordsInCycle(records, cs);
   const stats = computeStats(inCycle);
@@ -169,6 +185,7 @@ export function renderCycleDetail(records, key) {
     <header class="topbar">
       <button class="link" data-action="history">‹ 历史</button>
       <div class="cycle-title">周期详情</div>
+      ${renderTopbarRight(status, false)}
     </header>
     <div class="cycle-range center">${formatDateRange(cs)}</div>
     ${renderStats(stats)}
@@ -179,7 +196,24 @@ export function renderCycleDetail(records, key) {
   `;
 }
 
-// datetime-local 输入框需要的本地时间格式 YYYY-MM-DDTHH:MM
+export function renderLogin(registering) {
+  return `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-icon">👶🍼</div>
+        <h1>宝宝记录</h1>
+        <p class="login-sub">${registering ? '创建一个全家共用的账号' : '登录后，多台手机共享同一份数据'}</p>
+        <form class="login-form" data-action="${registering ? 'signup' : 'login'}">
+          <input class="login-input" type="email" name="username" placeholder="邮箱" autocomplete="email" required>
+          <input class="login-input" type="password" name="password" placeholder="密码" autocomplete="current-password" required>
+          <button class="btn-primary" type="submit">${registering ? '注册并登录' : '登录'}</button>
+        </form>
+        <button class="link login-toggle" data-action="toggle-register">${registering ? '已有账号？点此登录' : '第一次使用？点此注册'}</button>
+      </div>
+    </div>
+  `;
+}
+
 function toLocalInput(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');

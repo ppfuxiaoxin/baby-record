@@ -1,5 +1,5 @@
 // service-worker.js — 缓存应用外壳，离线可用
-const CACHE = 'baby-record-v2';
+const CACHE = 'baby-record-v4';
 const SHELL = [
   './',
   './index.html',
@@ -8,6 +8,9 @@ const SHELL = [
   './src/storage.js',
   './src/stats.js',
   './src/ui.js',
+  './src/config.js',
+  './src/cloud.js',
+  './src/sync.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
