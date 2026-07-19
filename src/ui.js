@@ -8,6 +8,7 @@ import {
   recordsInCycle,
   listCycles,
 } from './stats.js';
+import { APP_VERSION } from './config.js';
 
 const TYPE_LABEL = { feeding: '喂养', diaper: '尿布', sleep: '睡眠' };
 
@@ -114,8 +115,8 @@ export function renderHome(records, openSleep, status) {
   const inCycle = recordsInCycle(records, cs);
   const stats = computeStats(inCycle);
   const pending = inCycle.filter(isPending).length;
-  const sleepLabel = openSleep ? '结束睡眠' : '睡眠记录';
-  const sleepSub = openSleep ? `开始于 ${formatTime(openSleep.start)}` : '点一下开始记录';
+  const sleepLabel = openSleep ? '结束睡眠' : '睡眠';
+  const sleepSub = openSleep ? `从 ${formatTime(openSleep.start)}` : '开始';
 
   return `
     <header class="topbar">
@@ -127,18 +128,13 @@ export function renderHome(records, openSleep, status) {
     ${pending ? `<div class="pending-badge">${pending} 条待补充详情，点记录可补</div>` : ''}
     <div class="actions">
       <button class="btn-big feeding" data-action="feeding">
-        <span class="btn-icon">🍼</span>
-        <span class="btn-label">喂养记录</span>
-        <span class="btn-sub">点一下记下现在</span>
+        <span class="btn-icon">🍼</span><span class="btn-label">喂养</span>
       </button>
       <button class="btn-big diaper" data-action="diaper">
-        <span class="btn-icon">🧷</span>
-        <span class="btn-label">尿布情况</span>
-        <span class="btn-sub">点一下记下现在</span>
+        <span class="btn-icon">🧷</span><span class="btn-label">尿布</span>
       </button>
       <button class="btn-big sleep ${openSleep ? 'active' : ''}" data-action="sleep">
-        <span class="btn-icon">😴</span>
-        <span class="btn-label">${sleepLabel}</span>
+        <span class="btn-icon">😴</span><span class="btn-label">${sleepLabel}</span>
         <span class="btn-sub">${sleepSub}</span>
       </button>
     </div>
@@ -146,6 +142,7 @@ export function renderHome(records, openSleep, status) {
       <h2>本周期记录</h2>
       ${renderRecordColumns(inCycle)}
     </section>
+    <div class="app-version">宝宝记录 ${APP_VERSION}</div>
   `;
 }
 
@@ -268,6 +265,7 @@ export function renderLogin(registering) {
           <button class="btn-primary" type="submit">${registering ? '注册并登录' : '登录'}</button>
         </form>
         <button class="link login-toggle" data-action="toggle-register">${registering ? '已有账号？点此登录' : '第一次使用？点此注册'}</button>
+        <div class="app-version">宝宝记录 ${APP_VERSION}</div>
       </div>
     </div>
   `;

@@ -8,3 +8,6 @@ export const LC = {
   // anon public key（很长的一串）
   anonKey: 'sb_publishable_NCUaoSBF_NeRnz3IUJT6og_8m3bOQtD',
 };
+
+// App 版本号（每次更新改这里，方便确认手机上是不是最新版）
+export const APP_VERSION = 'v10';

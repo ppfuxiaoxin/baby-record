@@ -73,17 +73,18 @@ body {
 /* 待补充提示 */
 .pending-badge { background: var(--blue-soft); color: var(--blue-dark); font-size: 13px; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; }
 
-/* 三个大按钮 */
-.actions { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 18px; }
-.btn-big { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: none; border-radius: var(--radius); padding: 16px 18px; color: #fff; box-shadow: var(--shadow); cursor: pointer; text-align: left; }
+/* 三个按钮（同一排） */
+.actions { display: flex; flex-direction: row; gap: 8px; margin: 6px 0 18px; }
+.btn-big { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: none; border-radius: 14px; padding: 14px 4px; color: #fff; box-shadow: var(--shadow); cursor: pointer; text-align: center; }
 .btn-big .btn-icon { font-size: 22px; }
-.btn-big .btn-label { font-size: 18px; font-weight: 700; }
-.btn-big .btn-sub { font-size: 12px; opacity: 0.85; }
+.btn-big .btn-label { font-size: 15px; font-weight: 700; }
+.btn-big .btn-sub { font-size: 10px; opacity: 0.85; }
 .btn-big.feeding { background: var(--blue); }
 .btn-big.diaper { background: #5BA8E8; }
 .btn-big.sleep { background: var(--blue-dark); }
 .btn-big.sleep.active { background: var(--blue-deep); box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.25); }
-.btn-big:active { transform: scale(0.99); }
+.btn-big:active { transform: scale(0.98); }
+.app-version { text-align: center; color: var(--muted); font-size: 11px; padding: 16px 0 4px; }
 
 /* 记录三列（喂养 / 尿布 / 睡眠） */
 .list-section h2 { font-size: 15px; color: var(--muted); margin: 14px 2px 8px; font-weight: 600; }
