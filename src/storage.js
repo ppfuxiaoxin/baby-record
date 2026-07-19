@@ -115,3 +115,7 @@ export function clearTombstones(list) {
   const remain = loadTombstones().filter((t) => !remove.has(t.cloudObjectId));
   localStorage.setItem(TOMB_KEY, JSON.stringify(remain));
 }
+// 用给定列表覆盖墓碑（用于保留删除失败、待重试的项）
+export function setTombstones(list) {
+  localStorage.setItem(TOMB_KEY, JSON.stringify(list || []));
+}

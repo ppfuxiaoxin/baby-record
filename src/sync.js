@@ -68,14 +68,16 @@ function toCloud(r) {
 }
 
 // 合并云端记录到本地（纯逻辑，可单测）
+// deletedIds: 本地已删、待云端删除的 id 集合，这些不回填
 // 返回 { toUpsert: 本地需要新增/覆盖的记录, toRemove: 本地需要删除的 id }
-export function mergeCloudIntoLocal(localRecords, cloudRecords) {
+export function mergeCloudIntoLocal(localRecords, cloudRecords, deletedIds = new Set()) {
   const toUpsert = [];
   const toRemove = [];
   const cloudObjectIds = new Set(cloudRecords.map((c) => c.objectId));
 
   for (const c of cloudRecords) {
     const lid = c.localId || c.objectId;
+    if (deletedIds.has(lid)) continue; // 本地已删（待云端删），不回填
     const local = localRecords.find((r) => r.id === lid);
     if (!local) {
       toUpsert.push(fromCloud(c));
@@ -126,20 +128,22 @@ export async function sync() {
     if (await pushDirty(session)) changed = true;
 
     const tombstones = storage.loadTombstones();
+    const tombIds = new Set(tombstones.map((t) => t.id));
     if (tombstones.length) {
+      const remaining = [];
       for (const t of tombstones) {
         try {
           await cloud.remove(session, t.cloudObjectId);
         } catch (e) {
-          /* 对端可能已删，忽略 */
+          remaining.push(t); // 删除失败，保留墓碑下次重试
         }
       }
-      storage.clearTombstones(tombstones);
+      storage.setTombstones(remaining);
       changed = true;
     }
 
     const cloudRecords = await cloud.queryAll(session);
-    const { toUpsert, toRemove } = mergeCloudIntoLocal(storage.loadRecords(), cloudRecords);
+    const { toUpsert, toRemove } = mergeCloudIntoLocal(storage.loadRecords(), cloudRecords, tombIds);
     if (toUpsert.length || toRemove.length) changed = true;
     for (const rec of toUpsert) storage.upsertRecord(rec);
     for (const id of toRemove) storage.removeRecordById(id);
